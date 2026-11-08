@@ -1,0 +1,15 @@
+[theme]
+# This makes the main page white
+base = "light"
+primaryColor = "#00CC96" 
+backgroundColor = "#FFFFFF"
+# This makes the multiselect boxes light gray
+secondaryBackgroundColor = "#E2E6EA" 
+textColor = "#262730"
+font = "sans serif"
+
+[server]
+enableStaticServing = true
+
+[client]
+toolbarMode = "minimal"
