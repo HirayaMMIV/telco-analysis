@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import gc # Added for memory management
+import gc
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="Telco Network Dashboard", page_icon="📡", layout="wide")
@@ -62,8 +62,10 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: #CBD5E1 !important; border-color: #94A3B8 !important; }
         
-        /* FIXED NAVIGATION BAR */
-        div[data-testid="stRadio"] > div[role="radiogroup"] {
+        /* ========================================================= */
+        /* FIXED NAVIGATION BAR (SCOPED TO ONLY THE TOP NAVIGATION)  */
+        /* ========================================================= */
+        .top-nav-container div[data-testid="stRadio"] > div[role="radiogroup"] {
             display: flex !important;
             flex-direction: row !important;
             justify-content: center !important;
@@ -74,9 +76,16 @@ st.markdown("""
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06) !important;
             gap: 10px !important;
         }
-        div[data-testid="stRadio"] input[type="radio"] { display: none !important; }
-        div[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child { display: none !important; }
-        div[data-testid="stRadio"] label {
+
+        .top-nav-container div[data-testid="stRadio"] input[type="radio"] {
+            display: none !important;
+        }
+        
+        .top-nav-container div[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child {
+            display: none !important;
+        }
+
+        .top-nav-container div[data-testid="stRadio"] label {
             background-color: transparent !important;
             padding: 10px 20px !important;
             border-radius: 8px !important;
@@ -85,19 +94,81 @@ st.markdown("""
             margin: 0 !important;
             width: auto !important;
         }
-        div[data-testid="stRadio"] label:hover { background-color: #E2E8F0 !important; }
-        div[data-testid="stRadio"] label[data-checked="true"] {
+
+        .top-nav-container div[data-testid="stRadio"] label:hover {
+            background-color: #E2E8F0 !important;
+        }
+
+        .top-nav-container div[data-testid="stRadio"] label[data-checked="true"] {
             background-color: #FCA5A5 !important; 
             box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
         }
-        div[data-testid="stRadio"] label p {
+
+        .top-nav-container div[data-testid="stRadio"] label p {
             color: #1E293B !important;
             font-size: 1.1rem !important;
             font-weight: 600 !important;
             margin: 0 !important;
             white-space: nowrap !important;
         }
-        div[data-testid="stRadio"] label[data-checked="true"] p {
+        
+        .top-nav-container div[data-testid="stRadio"] label[data-checked="true"] p {
+            color: #000000 !important;
+            font-weight: 800 !important;
+        }
+
+        /* ========================================================= */
+        /* MAP PAGE TAB FORM (ALIGNED TO TEXT)                       */
+        /* ========================================================= */
+        .map-radio-container div[data-testid="stRadio"] > div[role="radiogroup"] {
+            display: flex !important;
+            flex-direction: row !important;
+            justify-content: flex-start !important;
+            flex-wrap: wrap !important;
+            background-color: #F1F5F9 !important;
+            padding: 8px 15px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 2px 4px -1px rgba(0,0,0,0.1) !important;
+            gap: 10px !important;
+            width: fit-content !important; 
+        }
+
+        .map-radio-container div[data-testid="stRadio"] input[type="radio"] {
+            display: none !important;
+        }
+        
+        .map-radio-container div[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child {
+            display: none !important;
+        }
+
+        .map-radio-container div[data-testid="stRadio"] label {
+            background-color: transparent !important;
+            padding: 8px 16px !important; /* Slightly smaller padding */
+            border-radius: 8px !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+            margin: 0 !important;
+            width: auto !important;
+        }
+
+        .map-radio-container div[data-testid="stRadio"] label:hover {
+            background-color: #E2E8F0 !important;
+        }
+
+        .map-radio-container div[data-testid="stRadio"] label[data-checked="true"] {
+            background-color: #FCA5A5 !important; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        }
+
+        .map-radio-container div[data-testid="stRadio"] label p {
+            color: #1E293B !important;
+            font-size: 1rem !important; /* Slightly smaller font */
+            font-weight: 600 !important;
+            margin: 0 !important;
+            white-space: nowrap !important; /* Prevents text from wrapping/overlapping */
+        }
+        
+        .map-radio-container div[data-testid="stRadio"] label[data-checked="true"] p {
             color: #000000 !important;
             font-weight: 800 !important;
         }
@@ -222,16 +293,18 @@ def apply_chart_style(fig, title_text="", is_pie=False):
         fig.update_layout(shapes=[dict(type="rect", xref="paper", yref="paper", x0=0, y0=0, x1=1, y1=1, line=dict(color="black", width=2), fillcolor="rgba(0,0,0,0)")])
     return fig
 
-# --- 4. CENTERED NAVIGATION BAR ---
+# --- 4. CENTERED NAVIGATION BAR (WRAPPED IN A CLASS) ---
 spacer_left, nav_col, spacer_right = st.columns([1.5, 2, 1.5])
 
 with nav_col:
+    st.markdown('<div class="top-nav-container">', unsafe_allow_html=True)
     nav_selection = st.radio(
         "Navigation",
         options=["📊 Network Overview", "📍 Coverage Map", "🛠️ Prescriptive Analytics"],
         horizontal=True,
         label_visibility="collapsed" 
     )
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
 # PAGE 1: OVERVIEW
@@ -301,27 +374,36 @@ elif nav_selection == "📍 Coverage Map":
     st.write("Explore signal strength across different locations. Use the options below to change the metric displayed and adjust the density of the points.")
     
     # --- Map Controls (Metric and Sample Size) ---
-    col_m1, col_m2 = st.columns([1, 2])
+    col_m1, col_m2 = st.columns([1, 1.2])
     
     with col_m1:
+        st.markdown("<p style='font-size: 14px; font-weight: 600; margin-bottom: 8px;'>Select Data to Display:</p>", unsafe_allow_html=True)
+        
+        # Wrap the radio button in the custom class we made in CSS
+        st.markdown('<div class="map-radio-container">', unsafe_allow_html=True)
         metric_options = {
-            "Raw Signal Strength (dBm)": "dBm",
-            "Reference Signal Power (RSRP)": "RSRP LTE",
-            "Signal Quality (SINR)": "SNR LTE"
+            "Raw Signal (dBm)": "dBm",
+            "RSRP": "RSRP LTE",
+            "SINR": "SNR LTE"
         }
-        selected_metric_label = st.radio("Select Data to Display:", list(metric_options.keys()))
+        selected_metric_label = st.radio(
+            "Map Data", 
+            options=list(metric_options.keys()), 
+            horizontal=True,
+            label_visibility="collapsed" # Hides Streamlit's default label
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         selected_metric_col = metric_options[selected_metric_label]
         
     with col_m2:
-        # New slider to adjust the number of points
         max_points = min(len(filtered_df), 5000)
-        # Use st.slider only if there's enough data
         if max_points > 500:
             sample_size = st.slider(
                 "Adjust Number of Sample Points on Map:", 
                 min_value=500, 
                 max_value=max_points, 
-                value=min(1500, max_points), # Default to 1500 or the max if data is small
+                value=min(1500, max_points),
                 step=250,
                 help="Increasing this number shows more data but may slow down your browser."
             )
@@ -346,7 +428,6 @@ elif nav_selection == "📍 Coverage Map":
     fig_map.update_layout(
         template="plotly_white", margin=dict(l=0, r=0, t=0, b=0), height=700, 
         map_center={"lat": -3.04, "lon": -60.00},
-        # Dynamically update the legend title based on selection
         coloraxis_colorbar=dict(title=dict(text=selected_metric_label, font=dict(color="black")), tickfont=dict(color="black"))
     )
     st.plotly_chart(fig_map, use_container_width=True)
