@@ -441,7 +441,7 @@ elif nav_selection == "📍 Coverage Map":
 elif nav_selection == "🛠️ Prescriptive Analytics":
     st.header("🛠️ Network Optimization Engine")
     st.markdown("""
-    This engine analyzes historical performance from your dataset to provide **prescriptive recommendations**. 
+    This engine analyzes historical performance to provide **Prescriptive Recommendations**. 
     By calculating the statistical average of **Signal Strength (RSRP)** and **Quality (SINR)** across different Frequency Bands, 
     we can recommend the optimal configuration for a specific scenario.
     """)
