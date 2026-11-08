@@ -238,7 +238,7 @@ with nav_col:
 # ==========================================
 if nav_selection == "📊 Network Overview":
     st.subheader("Network Overview KPIs")
-    st.markdown("A high-level summary of the network's current health, based on the dataset.")
+    st.markdown("A high-level summary of the network's current health, based on the filtered dataset.")
     
     col1, col2, col3, col4 = st.columns(4)
 
@@ -298,27 +298,61 @@ if nav_selection == "📊 Network Overview":
 # ==========================================
 elif nav_selection == "📍 Coverage Map":
     st.subheader("📍 Geographic Signal Coverage Map")
-    st.write("Explore signal strength across different locations. Darker dots represent weaker signals, brighter dots represent stronger signals. Hover over a point to see the exact signal strength (dBm) and coordinates.")
+    st.write("Explore signal strength across different locations. Use the options below to change the metric displayed and adjust the density of the points.")
     
-    if len(filtered_df) > 1500:
-        map_df = filtered_df.sample(n=1500, random_state=42)
-        st.info("Showing a sample of 1,500 points to ensure smooth browser performance.")
+    # --- Map Controls (Metric and Sample Size) ---
+    col_m1, col_m2 = st.columns([1, 2])
+    
+    with col_m1:
+        metric_options = {
+            "Raw Signal Strength (dBm)": "dBm",
+            "Reference Signal Power (RSRP)": "RSRP LTE",
+            "Signal Quality (SINR)": "SNR LTE"
+        }
+        selected_metric_label = st.radio("Select Data to Display:", list(metric_options.keys()))
+        selected_metric_col = metric_options[selected_metric_label]
+        
+    with col_m2:
+        # New slider to adjust the number of points
+        max_points = min(len(filtered_df), 5000)
+        # Use st.slider only if there's enough data
+        if max_points > 500:
+            sample_size = st.slider(
+                "Adjust Number of Sample Points on Map:", 
+                min_value=500, 
+                max_value=max_points, 
+                value=min(1500, max_points), # Default to 1500 or the max if data is small
+                step=250,
+                help="Increasing this number shows more data but may slow down your browser."
+            )
+        else:
+            sample_size = max_points
+            st.info(f"Total available points: {sample_size}")
+
+    # Apply the sample size
+    if len(filtered_df) > sample_size:
+        map_df = filtered_df.sample(n=sample_size, random_state=42)
+        st.caption(f"Showing a random sample of **{sample_size:,}** points out of {len(filtered_df):,} available.")
     else:
         map_df = filtered_df
+        st.caption(f"Showing all **{sample_size:,}** available points.")
 
-    fig_map = px.scatter_map(map_df, lat="Latitude", lon="Longitude", color="dBm", zoom=11,
+    # Dynamically build the map based on the selection
+    fig_map = px.scatter_map(map_df, lat="Latitude", lon="Longitude", color=selected_metric_col, zoom=11,
                              color_continuous_scale=px.colors.sequential.Viridis, map_style="carto-positron",
-                             hover_data={"Latitude": True, "Longitude": True, "dBm": True})
+                             hover_data={"Latitude": True, "Longitude": True, selected_metric_col: True})
+    
     fig_map.update_traces(marker=dict(size=12))
     fig_map.update_layout(
         template="plotly_white", margin=dict(l=0, r=0, t=0, b=0), height=700, 
         map_center={"lat": -3.04, "lon": -60.00},
-        coloraxis_colorbar=dict(title=dict(text="Signal (dBm)", font=dict(color="black")), tickfont=dict(color="black"))
+        # Dynamically update the legend title based on selection
+        coloraxis_colorbar=dict(title=dict(text=selected_metric_label, font=dict(color="black")), tickfont=dict(color="black"))
     )
     st.plotly_chart(fig_map, use_container_width=True)
     
     with st.expander("ℹ️ How to use this Map"):
-        st.write("This interactive map plots your data points geographically. **Brighter colors (Yellow/Green)** represent strong signal strength, while **darker colors (Purple/Black)** represent weak or dropped signals. You can zoom in and out using your mouse or trackpad.")
+        st.write("This interactive map plots your data points geographically. **Brighter colors (Yellow/Green)** represent stronger signals or better quality depending on your selection, while **darker colors (Purple/Black)** represent weaker signals. You can zoom in and out using your mouse or trackpad.")
 
 # ==========================================
 # PAGE 3: PRESCRIPTIVE ANALYTICS ONLY
@@ -326,7 +360,7 @@ elif nav_selection == "📍 Coverage Map":
 elif nav_selection == "🛠️ Prescriptive Analytics":
     st.header("🛠️ Network Optimization Engine")
     st.markdown("""
-    This engine analyzes historical performance to provide **Prescriptive Recommendations**. 
+    This engine analyzes historical performance from your dataset to provide **prescriptive recommendations**. 
     By calculating the statistical average of **Signal Strength (RSRP)** and **Quality (SINR)** across different Frequency Bands, 
     we can recommend the optimal configuration for a specific scenario.
     """)
