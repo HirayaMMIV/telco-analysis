@@ -121,20 +121,15 @@ st.markdown("""
 @st.cache_data(show_spinner="Loading and processing network data...")
 def load_data():
     try:
-        # 1. Define only the columns you actually use in the app to save RAM
         cols_to_use = [
             "Current Date Time", "Latitude", "Longitude", "dBm", 
             "RSRP LTE", "SNR LTE", "PCI LTE", "Network Operator", 
             "Network Type", "Band"
         ]
-        
-        # 2. Force smaller data types (float32) to save massive amounts of memory
         dtypes = {
             "dBm": "float32", "RSRP LTE": "float32", "SNR LTE": "float32", 
             "Latitude": "float32", "Longitude": "float32"
         }
-
-        # 3. Load with optimized settings
         df = pd.read_csv(
             "TelcoNetwork_Dataset_MagnoGrijaldo.csv", 
             usecols=lambda c: c.strip() in cols_to_use,
@@ -145,13 +140,11 @@ def load_data():
         st.error("Dataset not found. Please ensure 'TelcoNetwork_Dataset_MagnoGrijaldo.csv' is in the same folder.")
         st.stop()
     except ValueError:
-        # Fallback if some columns don't exist exactly as named
         df = pd.read_csv("TelcoNetwork_Dataset_MagnoGrijaldo.csv", on_bad_lines="skip")
         df.columns = [c.strip() for c in df.columns]
 
     df.columns = [c.strip() for c in df.columns]
     
-    # Convert strings to categories (saves a TON of memory)
     for col in ["Network Operator", "Network Type", "Band"]:
         if col in df.columns:
             df[col] = df[col].astype("category")
@@ -159,18 +152,10 @@ def load_data():
     if "Current Date Time" in df.columns:
         df["Current Date Time"] = pd.to_datetime(df["Current Date Time"], errors="coerce")
     
-    # 4. VECTORIZED Coordinate Fix (Replaces slow and memory-heavy df.apply)
     def fix_coord_vectorized(series):
-        # If value is valid, keep it. If invalid, convert to string, insert decimal, convert back to float.
         mask = (series < -90) | (series > 90) if "Lat" in series.name else (series < -180) | (series > 180)
-        
-        # Create a string version of the absolute values for invalid rows
         str_vals = series[mask].abs().astype(int).astype(str)
-        
-        # Insert decimal after first digit (e.g., 60013 -> 60.013) and make negative
         fixed_vals = pd.to_numeric(str_vals.str[0] + "." + str_vals.str[1:], errors="coerce") * -1
-        
-        # Apply the fixed values back to the original series using .where()
         return series.where(~mask, fixed_vals)
 
     if "Latitude" in df.columns and "Longitude" in df.columns:
@@ -178,7 +163,6 @@ def load_data():
         df["Longitude"] = fix_coord_vectorized(df["Longitude"])
         df = df.dropna(subset=["Latitude", "Longitude", "dBm"])
     
-    # 5. Vectorized Quality Calculation
     conditions = [
         (df["dBm"] >= -85),
         (df["dBm"] >= -95) & (df["dBm"] < -85),
@@ -189,9 +173,7 @@ def load_data():
     df["Quality"] = np.select(conditions, choices, default="Unknown")
     df["Quality"] = df["Quality"].astype("category")
 
-    # Force garbage collection to free up memory
     gc.collect()
-    
     return df
 
 df = load_data()
@@ -217,7 +199,6 @@ operator_filter = create_checkbox_filter("Network Operator (MNC)", df["Network O
 net_type_filter = create_checkbox_filter("Network Type", df["Network Type"].dropna().unique())
 band_filter = create_checkbox_filter("Frequency Band", sorted(df["Band"].dropna().unique()))
 
-# Filtering logic
 filtered_df = df[
     (df["Network Operator"].isin(operator_filter)) & 
     (df["Network Type"].isin(net_type_filter)) &
@@ -257,6 +238,8 @@ with nav_col:
 # ==========================================
 if nav_selection == "📊 Network Overview":
     st.subheader("Network Overview KPIs")
+    st.markdown("A high-level summary of the network's current health, based on the filtered dataset.")
+    
     col1, col2, col3, col4 = st.columns(4)
 
     with col1: st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Samples</div><div class="kpi-value">{len(filtered_df):,}</div></div>', unsafe_allow_html=True)
@@ -267,13 +250,17 @@ if nav_selection == "📊 Network Overview":
     st.divider()
 
     st.subheader("Signal Quality Distribution")
+    st.markdown("This section breaks down the overall network quality. The **pie chart** shows the proportion of samples in each quality tier, while the **scatter plot** maps raw signal strength (RSRP) against signal quality (SINR). The dashed lines represent standard thresholds for acceptable performance.")
+    
     color_map = {"Excellent (>= -85)": "#00CC96", "Good (-86 to -95)": "#636EFA", "Fair (-96 to -105)": "#EF553B", "Poor (<= -106)": "#FFA15A"}
     col_q1, col_q2 = st.columns([1, 2])
+    
     with col_q1:
         qc = filtered_df["Quality"].value_counts().reset_index()
         qc.columns = ["Quality", "Count"]
         fig_pie = px.pie(qc, names="Quality", values="Count", hole=0.5, color="Quality", color_discrete_map=color_map)
         st.plotly_chart(apply_chart_style(fig_pie, "Quality Distribution", is_pie=True), use_container_width=True)
+        
     with col_q2:
         fig_scatter = px.scatter(filtered_df, x="RSRP LTE", y="SNR LTE", color="Quality", opacity=0.6, color_discrete_map=color_map)
         fig_scatter.add_vline(x=-95, line_dash="dash", line_color="black")
@@ -282,6 +269,7 @@ if nav_selection == "📊 Network Overview":
     
     st.divider()
     with st.expander("🗄️ View Cleaned & Filtered Data"):
+        st.markdown("Explore the raw data points that make up the charts above. You can sort by any column or download the data directly.")
         st.dataframe(filtered_df, use_container_width=True)
 
 # ==========================================
@@ -289,7 +277,7 @@ if nav_selection == "📊 Network Overview":
 # ==========================================
 elif nav_selection == "📍 Coverage Map":
     st.subheader("📍 Geographic Signal Coverage Map")
-    st.write("Explore signal strength across different locations. Darker dots represent weaker signals, brighter dots represent stronger signals.")
+    st.write("Explore signal strength across different locations. Darker dots represent weaker signals, brighter dots represent stronger signals. Hover over a point to see the exact signal strength (dBm) and coordinates.")
     
     if len(filtered_df) > 1500:
         map_df = filtered_df.sample(n=1500, random_state=42)
@@ -332,6 +320,7 @@ elif nav_selection == "🛠️ Prescriptive Analytics":
 
     with col_p1:
         st.markdown("### 📊 Data-Driven Baseline")
+        st.markdown("The chart below shows the average raw signal strength (RSRP) for each frequency band in your dataset. This serves as the baseline for the recommendations provided in the simulator.")
         st.info(f"**Historical Best Band for Raw Signal:** Band {best_band_signal['Band']} (Avg: {best_band_signal['RSRP LTE']:.1f} dBm)\n\n"
                 f"**Historical Best Band for Clean Quality:** Band {best_band_quality['Band']} (Avg: {best_band_quality['SNR LTE']:.1f} dB)")
         
@@ -342,7 +331,7 @@ elif nav_selection == "🛠️ Prescriptive Analytics":
 
     with col_p2:
         st.markdown("### 🤖 Network Scenario Simulator")
-        st.write("Input a scenario to receive an actionable recommendation based on the data above.")
+        st.write("Input your current network metrics below to receive an actionable recommendation based on the dataset's historical performance.")
         
         bands_list = sorted(df['Band'].dropna().unique())
         current_band = st.radio("Current Frequency Band", options=bands_list, horizontal=True)
