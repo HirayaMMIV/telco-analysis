@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+import gc # Added for memory management
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(page_title="Telco Network Dashboard", page_icon="📡", layout="wide")
@@ -61,10 +62,7 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: #CBD5E1 !important; border-color: #94A3B8 !important; }
         
-        /* ========================================================= */
-        /* FIXED NAVIGATION BAR (NO CIRCLES, SINGLE ROW, CENTERED)   */
-        /* ========================================================= */
-        
+        /* FIXED NAVIGATION BAR */
         div[data-testid="stRadio"] > div[role="radiogroup"] {
             display: flex !important;
             flex-direction: row !important;
@@ -76,15 +74,8 @@ st.markdown("""
             box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06) !important;
             gap: 10px !important;
         }
-
-        div[data-testid="stRadio"] input[type="radio"] {
-            display: none !important;
-        }
-        
-        div[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child {
-            display: none !important;
-        }
-
+        div[data-testid="stRadio"] input[type="radio"] { display: none !important; }
+        div[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child { display: none !important; }
         div[data-testid="stRadio"] label {
             background-color: transparent !important;
             padding: 10px 20px !important;
@@ -94,16 +85,11 @@ st.markdown("""
             margin: 0 !important;
             width: auto !important;
         }
-
-        div[data-testid="stRadio"] label:hover {
-            background-color: #E2E8F0 !important;
-        }
-
+        div[data-testid="stRadio"] label:hover { background-color: #E2E8F0 !important; }
         div[data-testid="stRadio"] label[data-checked="true"] {
             background-color: #FCA5A5 !important; 
             box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
         }
-
         div[data-testid="stRadio"] label p {
             color: #1E293B !important;
             font-size: 1.1rem !important;
@@ -111,7 +97,6 @@ st.markdown("""
             margin: 0 !important;
             white-space: nowrap !important;
         }
-        
         div[data-testid="stRadio"] label[data-checked="true"] p {
             color: #000000 !important;
             font-weight: 800 !important;
@@ -119,17 +104,10 @@ st.markdown("""
 
         /* Fixed Footer */
         .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #FFFFFF;
-            text-align: center; 
-            color: #555555; 
-            font-size: 14px; 
-            padding: 15px 0;
-            border-top: 1px solid #EAEAEA;
-            z-index: 999;
+            position: fixed; bottom: 0; left: 0; width: 100%;
+            background-color: #FFFFFF; text-align: center; color: #555555; 
+            font-size: 14px; padding: 15px 0;
+            border-top: 1px solid #EAEAEA; z-index: 999;
         }
     </style>
 
@@ -139,42 +117,81 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# --- 2. LOAD & CLEAN DATA ---
+# --- 2. LOAD & CLEAN DATA (OPTIMIZED FOR MEMORY) ---
 @st.cache_data(show_spinner="Loading and processing network data...")
 def load_data():
     try:
-        df = pd.read_csv("TelcoNetwork_Dataset_MagnoGrijaldo.csv", on_bad_lines="skip")
+        # 1. Define only the columns you actually use in the app to save RAM
+        cols_to_use = [
+            "Current Date Time", "Latitude", "Longitude", "dBm", 
+            "RSRP LTE", "SNR LTE", "PCI LTE", "Network Operator", 
+            "Network Type", "Band"
+        ]
+        
+        # 2. Force smaller data types (float32) to save massive amounts of memory
+        dtypes = {
+            "dBm": "float32", "RSRP LTE": "float32", "SNR LTE": "float32", 
+            "Latitude": "float32", "Longitude": "float32"
+        }
+
+        # 3. Load with optimized settings
+        df = pd.read_csv(
+            "TelcoNetwork_Dataset_MagnoGrijaldo.csv", 
+            usecols=lambda c: c.strip() in cols_to_use,
+            dtype=dtypes,
+            on_bad_lines="skip"
+        )
     except FileNotFoundError:
         st.error("Dataset not found. Please ensure 'TelcoNetwork_Dataset_MagnoGrijaldo.csv' is in the same folder.")
         st.stop()
+    except ValueError:
+        # Fallback if some columns don't exist exactly as named
+        df = pd.read_csv("TelcoNetwork_Dataset_MagnoGrijaldo.csv", on_bad_lines="skip")
+        df.columns = [c.strip() for c in df.columns]
 
     df.columns = [c.strip() for c in df.columns]
-    num_cols = ["dBm", "RSRP LTE", "SNR LTE", "Latitude", "Longitude", "Downstream Bandwidth", "Upstream Bandwidth"]
-    for col in num_cols:
+    
+    # Convert strings to categories (saves a TON of memory)
+    for col in ["Network Operator", "Network Type", "Band"]:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df[col] = df[col].astype("category")
+            
+    if "Current Date Time" in df.columns:
+        df["Current Date Time"] = pd.to_datetime(df["Current Date Time"], errors="coerce")
     
-    df["Current Date Time"] = pd.to_datetime(df["Current Date Time"], errors="coerce")
-    
-    def fix_coord(val):
-        if pd.isna(val): return np.nan
-        try: v = float(val)
-        except (ValueError, TypeError): return np.nan
-        if -90 <= v <= 90 or -180 <= v <= 180: return v
-        s = str(int(abs(v)))
-        fixed = float(s[0] + "." + s[1:]) * -1 if len(s) >= 5 else -abs(v) / 1000
-        return fixed if (-90 <= fixed <= 90) or (-180 <= fixed <= 180) else np.nan
+    # 4. VECTORIZED Coordinate Fix (Replaces slow and memory-heavy df.apply)
+    def fix_coord_vectorized(series):
+        # If value is valid, keep it. If invalid, convert to string, insert decimal, convert back to float.
+        mask = (series < -90) | (series > 90) if "Lat" in series.name else (series < -180) | (series > 180)
+        
+        # Create a string version of the absolute values for invalid rows
+        str_vals = series[mask].abs().astype(int).astype(str)
+        
+        # Insert decimal after first digit (e.g., 60013 -> 60.013) and make negative
+        fixed_vals = pd.to_numeric(str_vals.str[0] + "." + str_vals.str[1:], errors="coerce") * -1
+        
+        # Apply the fixed values back to the original series using .where()
+        return series.where(~mask, fixed_vals)
 
-    df["Latitude"] = df["Latitude"].apply(fix_coord)
-    df["Longitude"] = df["Longitude"].apply(fix_coord)
-    df = df.dropna(subset=["Latitude", "Longitude", "dBm"])
+    if "Latitude" in df.columns and "Longitude" in df.columns:
+        df["Latitude"] = fix_coord_vectorized(df["Latitude"])
+        df["Longitude"] = fix_coord_vectorized(df["Longitude"])
+        df = df.dropna(subset=["Latitude", "Longitude", "dBm"])
     
-    def quality(dbm):
-        if dbm >= -85: return "Excellent (>= -85)"
-        elif dbm >= -95: return "Good (-86 to -95)"
-        elif dbm >= -105: return "Fair (-96 to -105)"
-        else: return "Poor (<= -106)"
-    df["Quality"] = df["dBm"].apply(quality)
+    # 5. Vectorized Quality Calculation
+    conditions = [
+        (df["dBm"] >= -85),
+        (df["dBm"] >= -95) & (df["dBm"] < -85),
+        (df["dBm"] >= -105) & (df["dBm"] < -95),
+        (df["dBm"] < -105)
+    ]
+    choices = ["Excellent (>= -85)", "Good (-86 to -95)", "Fair (-96 to -105)", "Poor (<= -106)"]
+    df["Quality"] = np.select(conditions, choices, default="Unknown")
+    df["Quality"] = df["Quality"].astype("category")
+
+    # Force garbage collection to free up memory
+    gc.collect()
+    
     return df
 
 df = load_data()
@@ -200,6 +217,7 @@ operator_filter = create_checkbox_filter("Network Operator (MNC)", df["Network O
 net_type_filter = create_checkbox_filter("Network Type", df["Network Type"].dropna().unique())
 band_filter = create_checkbox_filter("Frequency Band", sorted(df["Band"].dropna().unique()))
 
+# Filtering logic
 filtered_df = df[
     (df["Network Operator"].isin(operator_filter)) & 
     (df["Network Type"].isin(net_type_filter)) &
@@ -301,7 +319,7 @@ elif nav_selection == "🛠️ Prescriptive Analytics":
     we can recommend the optimal configuration for a specific scenario.
     """)
 
-    band_performance = filtered_df.groupby("Band").agg({
+    band_performance = filtered_df.groupby("Band", observed=True).agg({
         "RSRP LTE": "mean",
         "SNR LTE": "mean",
         "dBm": "count"
@@ -356,7 +374,7 @@ elif nav_selection == "🛠️ Prescriptive Analytics":
                 st.markdown(f"- **Maintain Configuration:** Current metrics are within acceptable thresholds. No band switching is prescribed by the data at this time.")
                 
             if current_band != best_band_quality['Band'] and current_snr < 10:
-                 st.markdown(f"- **Alternative:** Try a different network operator. The dataset shows varying performance across MNCs. (Best operator average: {filtered_df.groupby('Network Operator')['SNR LTE'].mean().idxmax()}).")
+                 st.markdown(f"- **Alternative:** Try a different network operator. The dataset shows varying performance across MNCs. (Best operator average: {filtered_df.groupby('Network Operator', observed=True)['SNR LTE'].mean().idxmax()}).")
 
 # --- 5. FIXED FOOTER ---
 st.markdown("""
