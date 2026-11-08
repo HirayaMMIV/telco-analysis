@@ -238,19 +238,34 @@ with nav_col:
 # ==========================================
 if nav_selection == "📊 Network Overview":
     st.subheader("Network Overview KPIs")
-    st.markdown("A high-level summary of the network's current health, based on the filtered dataset.")
+    st.markdown("A high-level summary of the network's current health, based on the dataset.")
     
     col1, col2, col3, col4 = st.columns(4)
 
-    with col1: st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Samples</div><div class="kpi-value">{len(filtered_df):,}</div></div>', unsafe_allow_html=True)
-    with col2: st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Signal (RSRP)</div><div class="kpi-value">{filtered_df["RSRP LTE"].mean():.1f} dBm</div></div>', unsafe_allow_html=True)
-    with col3: st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Quality (SINR)</div><div class="kpi-value">{filtered_df["SNR LTE"].mean():.1f} dB</div></div>', unsafe_allow_html=True)
-    with col4: st.markdown(f'<div class="kpi-card"><div class="kpi-title">Unique Cell Towers (PCI)</div><div class="kpi-value">{filtered_df["PCI LTE"].nunique()}</div></div>', unsafe_allow_html=True)
+    with col1: 
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Total Samples</div><div class="kpi-value">{len(filtered_df):,}</div></div>', unsafe_allow_html=True)
+        with st.expander("ℹ️ What is this?"):
+            st.write("This represents the total number of valid, unique data points currently selected by your sidebar filters. It indicates how much data is backing the charts on this page.")
+
+    with col2: 
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Signal (RSRP)</div><div class="kpi-value">{filtered_df["RSRP LTE"].mean():.1f} dBm</div></div>', unsafe_allow_html=True)
+        with st.expander("ℹ️ What is this?"):
+            st.write("**RSRP (Reference Signal Received Power)** is the average power of the LTE reference signals. It measures raw signal strength. **Higher is better.** Values above -85 dBm are excellent, while values below -105 dBm indicate poor coverage.")
+
+    with col3: 
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Quality (SINR)</div><div class="kpi-value">{filtered_df["SNR LTE"].mean():.1f} dB</div></div>', unsafe_allow_html=True)
+        with st.expander("ℹ️ What is this?"):
+            st.write("**SINR (Signal-to-Interference-plus-Noise Ratio)** measures the quality of the connection. Unlike raw signal strength, it accounts for background noise and interference. **Higher is better.** Values above 10 dB indicate a clean signal, while values near 0 or negative mean heavy interference.")
+
+    with col4: 
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Unique Cell Towers (PCI)</div><div class="kpi-value">{filtered_df["PCI LTE"].nunique()}</div></div>', unsafe_allow_html=True)
+        with st.expander("ℹ️ What is this?"):
+            st.write("**PCI (Physical Cell Identity)** is a unique identifier for a cell tower sector. This metric shows how many different cell towers your device connected to within the filtered dataset, indicating network density.")
 
     st.divider()
 
     st.subheader("Signal Quality Distribution")
-    st.markdown("This section breaks down the overall network quality. The **pie chart** shows the proportion of samples in each quality tier, while the **scatter plot** maps raw signal strength (RSRP) against signal quality (SINR). The dashed lines represent standard thresholds for acceptable performance.")
+    st.markdown("This section breaks down the overall network quality. The **pie chart** shows the proportion of samples in each quality tier, while the **scatter plot** maps raw signal strength (RSRP) against signal quality (SINR).")
     
     color_map = {"Excellent (>= -85)": "#00CC96", "Good (-86 to -95)": "#636EFA", "Fair (-96 to -105)": "#EF553B", "Poor (<= -106)": "#FFA15A"}
     col_q1, col_q2 = st.columns([1, 2])
@@ -261,11 +276,17 @@ if nav_selection == "📊 Network Overview":
         fig_pie = px.pie(qc, names="Quality", values="Count", hole=0.5, color="Quality", color_discrete_map=color_map)
         st.plotly_chart(apply_chart_style(fig_pie, "Quality Distribution", is_pie=True), use_container_width=True)
         
+        with st.expander("ℹ️ How to read this Pie Chart"):
+            st.write("This chart categorizes every data sample into one of four quality tiers based on its raw dBm strength. A healthy network will have a large green/blue section, indicating the majority of connections are excellent or good.")
+        
     with col_q2:
         fig_scatter = px.scatter(filtered_df, x="RSRP LTE", y="SNR LTE", color="Quality", opacity=0.6, color_discrete_map=color_map)
         fig_scatter.add_vline(x=-95, line_dash="dash", line_color="black")
         fig_scatter.add_hline(y=0, line_dash="dash", line_color="black")
         st.plotly_chart(apply_chart_style(fig_scatter, "Signal Strength vs Quality"), use_container_width=True)
+        
+        with st.expander("ℹ️ How to read this Scatter Plot"):
+            st.write("The X-axis is raw power (RSRP) and the Y-axis is signal quality (SINR). The **dashed lines** represent standard thresholds (-95 dBm for power, 0 dB for quality). Points in the bottom-left corner indicate areas where both signal is weak and interference is high.")
     
     st.divider()
     with st.expander("🗄️ View Cleaned & Filtered Data"):
@@ -295,6 +316,9 @@ elif nav_selection == "📍 Coverage Map":
         coloraxis_colorbar=dict(title=dict(text="Signal (dBm)", font=dict(color="black")), tickfont=dict(color="black"))
     )
     st.plotly_chart(fig_map, use_container_width=True)
+    
+    with st.expander("ℹ️ How to use this Map"):
+        st.write("This interactive map plots your data points geographically. **Brighter colors (Yellow/Green)** represent strong signal strength, while **darker colors (Purple/Black)** represent weak or dropped signals. You can zoom in and out using your mouse or trackpad.")
 
 # ==========================================
 # PAGE 3: PRESCRIPTIVE ANALYTICS ONLY
@@ -302,7 +326,7 @@ elif nav_selection == "📍 Coverage Map":
 elif nav_selection == "🛠️ Prescriptive Analytics":
     st.header("🛠️ Network Optimization Engine")
     st.markdown("""
-    This engine analyzes historical performance from your dataset to provide **prescriptive recommendations**. 
+    This engine analyzes historical performance to provide **Prescriptive Recommendations**. 
     By calculating the statistical average of **Signal Strength (RSRP)** and **Quality (SINR)** across different Frequency Bands, 
     we can recommend the optimal configuration for a specific scenario.
     """)
@@ -328,6 +352,9 @@ elif nav_selection == "🛠️ Prescriptive Analytics":
                           x="Band", y="RSRP LTE", color="RSRP LTE", color_continuous_scale="Blues",
                           title="Average RSRP by Band (Basis for Recommendation)")
         st.plotly_chart(apply_chart_style(fig_band), use_container_width=True)
+        
+        with st.expander("ℹ️ How to read this Bar Chart"):
+            st.write("This chart ranks the different frequency bands by their average raw signal power. Taller bars mean that, on average, that specific band provides a stronger connection in your dataset's geography.")
 
     with col_p2:
         st.markdown("### 🤖 Network Scenario Simulator")
